@@ -1,0 +1,135 @@
+mport requests
+import sqlite3
+import os
+
+# TMDB API Configuration
+TMDB_API_HEADERS = {
+    "accept": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjNmNiYzg3YTUxNzY0YzEzODQ0NTE2OTg4ZDliNzMyZCIsIm5iZiI6MTczMzg1MzYwMS4wMDE5OTk5LCJzdWIiOiI2NzU4ODFhMDM2ODg0NTlkNzU4OWFmMjYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.UDruEGkcZ3wC4F4tmApouiPAuVzqWLVRmxn2nYbhwpI"
+}
+TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie"
+TMDB_GENRE_URL = "https://api.themoviedb.org/3/genre/movie/list?language=en"
+
+# List of movie titles
+movies = [ "Barbie", "Home Alone", "3 Idiots", "Spy Kids", "Flipped", "The Godfather", "The Shawshank Redemption",
+       "Pulp Fiction", "The Dark Knight", "Schindler's List", "Forrest Gump", "The Lord of the Rings: The Return of the King",
+       "Fight Club", "Inception", "The Matrix", "The Silence of the Lambs", "Star Wars: Episode V - The Empire Strikes Back",
+       "Goodfellas", "The Lord of the Rings: The Fellowship of the Ring", "The Lord of the Rings: The Two Towers", "The Green Mile",
+       "The Godfather: Part II", "Se7en", "The Usual Suspects", "The Lion King", "Gladiator", "Saving Private Ryan",
+       "The Departed", "The Prestige", "The Pianist", "The Dark Knight Rises", "The Avengers", "Titanic", "Jurassic Park",
+       "The Terminator", "The Truman Show", "Back to the Future", "Ghostbusters", "Shershaah", "Good Will Hunting",
+       "Braveheart", "The Shining", "Psycho", "The Sixth Sense", "The Exorcist", "A Clockwork Orange", "American History X",
+       "The Good, the Bad and the Ugly", "A Fistful of Dollars", "For a Few Dollars More", "Unforgiven", "No Country for Old Men",
+       "Fargo", "The Big Lebowski", "O Brother, Where Art Thou?", "True Grit", "The Revenant",
+       "Birdman or (The Unexpected Virtue of Ignorance)", "The Grand Budapest Hotel", "Moonrise Kingdom", "The Royal Tenenbaums",
+       "Fantastic Mr. Fox", "Isle of Dogs", "Reservoir Dogs", "Jackie Brown", "Kill Bill: Vol. 1", "Kill Bill: Vol. 2",
+       "Death Proof", "Django Unchained", "The Hateful Eight", "Once Upon a Time in Hollywood", "Spirited Away",
+       "My Neighbor Totoro", "Princess Mononoke", "Howl's Moving Castle", "Ponyo", "Castle in the Sky", "Kiki's Delivery Service",
+       "Nausicaä of the Valley of the Wind", "Porco Rosso", "Lagaan", "Dilwale Dulhania Le Jayenge", "3 Idiots", "PK",
+       "Gully Boy", "Queen", "Taare Zameen Par", "Zindagi Na Milegi Dobara", "Dangal", "Swades", "Rang De Basanti", "Barfi!",
+       "Andhadhun", "Mughal-E-Azam", "Chak De! India", "Kahaani", "Dil Chahta Hai", "Gangs of Wasseypur", "Bajrangi Bhaijaan",
+       "Kabhi Khushi Kabhie Gham", "Vicky Donor", "Om Shanti Om", "My Name Is Khan", "Devdas"
+   ]
+   
+
+# Fetch and store genres
+def fetch_genres():
+    response = requests.get(TMDB_GENRE_URL, headers=TMDB_API_HEADERS)
+    genre_data = response.json().get("genres", [])
+    return {genre["id"]: genre["name"] for genre in genre_data}
+
+# Fetch movie data from TMDB
+def fetch_movie_data(movie_title):
+    params = {
+        "query": movie_title,
+        "language": "en-US",
+        "page": 1
+    }
+    response = requests.get(TMDB_SEARCH_URL, headers=TMDB_API_HEADERS, params=params)
+    movie_data = response.json().get("results", [])
+    return movie_data[0] if movie_data else None
+
+# Insert genres into the database
+def insert_genres(cursor, genre_mapping):
+    for genre_id, genre_name in genre_mapping.items():
+        cursor.execute('''INSERT OR IGNORE INTO genres (id, name) VALUES (?, ?)''', (genre_id, genre_name))
+
+# Insert movie data into the database
+def insert_movie_data(cursor, movie_data):
+    if movie_data:
+        title = movie_data.get("title")
+        year = movie_data.get("release_date", "").split("-")[0]
+        imdb_rating = movie_data.get("vote_average")
+        
+        cursor.execute('''INSERT OR IGNORE INTO movies (title, year, imdb_rating) VALUES (?, ?, ?)''', 
+                       (title, year, imdb_rating))
+        return cursor.lastrowid  # Return movie's row ID
+
+# Link movies and genres in a mapping table
+def link_movie_genres(cursor, movie_id, genre_ids):
+    for genre_id in genre_ids:
+        cursor.execute('''INSERT OR IGNORE INTO movie_genres (movie_id, genre_id) VALUES (?, ?)''', 
+                       (movie_id, genre_id))
+
+# Initialize SQLite database
+def create_database():
+    base_path = os.path.abspath(os.path.dirname(__file__))
+    db_path = os.path.join(base_path, 'combined.db')
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    # Create tables
+    cursor.execute('''CREATE TABLE IF NOT EXISTS movies (
+                      id INTEGER PRIMARY KEY,
+                      title TEXT UNIQUE,
+                      year TEXT,
+                      imdb_rating TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS genres (
+                      id INTEGER PRIMARY KEY,
+                      name TEXT UNIQUE)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS movie_genres (
+                      movie_id INTEGER,
+                      genre_id INTEGER,
+                      PRIMARY KEY (movie_id, genre_id),
+                      FOREIGN KEY (movie_id) REFERENCES movies(id),
+                      FOREIGN KEY (genre_id) REFERENCES genres(id))''')
+    conn.commit()
+    conn.close()
+
+# Main function
+def main():
+    # Initialize database and connect
+    create_database()
+    conn = sqlite3.connect('combined.db')
+    cursor = conn.cursor()
+
+    # Fetch and store genre data
+    genre_mapping = fetch_genres()
+    insert_genres(cursor, genre_mapping)
+
+    # Limit movies to process to 25 per execution
+    counter = 0
+
+    # Iterate through the list of movies
+    for movie_title in movies:
+        if counter >= 25:
+            break  # Stop after processing 25 movies
+        
+        # Fetch movie data from the API
+        movie_data = fetch_movie_data(movie_title)
+        
+        # Insert movie data into the database
+        try:
+            movie_id = insert_movie_data(cursor, movie_data)
+            genre_ids = movie_data.get("genre_ids", [])
+            link_movie_genres(cursor, movie_id, genre_ids)
+            counter += 1
+        except sqlite3.IntegrityError:
+            print(f"Skipping duplicate or invalid entry for movie: {movie_title}")
+            pass
+
+    # Commit and close connection
+    conn.commit()
+    conn.close()
+
+if __name__ == "__main__":
+    main()
