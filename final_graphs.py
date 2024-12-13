@@ -10,24 +10,43 @@ def read_csv_data(filename, usecols=None):
     df = pd.read_csv(filename, usecols=usecols)
     return df
 
-# Function to visualize average rating of all books
-def visualize_book_data():
-    df = read_csv_data('book_calculations.csv', usecols=['Average Rating of All Books', 'Genre', 'Average Rating'])
-    average_rating = df.iloc[0]['Average Rating of All Books']
-    genres = df['Genre'][1:].dropna()
-    avg_ratings = df['Average Rating'][1:].dropna()
+# Helper function to get data from SQLite database
+def get_data_from_db(query):
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute(query)
+    results = cursor.fetchall()
+    conn.close()
+    return results
 
-    plt.barh(genres, avg_ratings)
+# Function to visualize book ratings data
+def visualize_book_data():
+    query = '''
+        SELECT title, average_rating FROM books WHERE average_rating IS NOT NULL;
+    '''
+    results = get_data_from_db(query)
+    titles = [result[0] for result in results]
+    ratings = [result[1] for result in results]
+
+    plt.barh(titles, ratings)
     plt.xlabel('Average Rating')
-    plt.title('Average Ratings of Books by Genre')
+    plt.title('Average Ratings of Books')
     plt.tight_layout()
     plt.show()
 
-# Function to visualize average rating by genre
+# Function to visualize average rating by book genre
 def average_rating_by_genre_graph():
-    df = read_csv_data('book_calculations.csv', usecols=['Genre', 'Average Rating'])
-    genres = df['Genre'][1:].dropna()
-    avg_ratings = df['Average Rating'][1:].dropna()
+    query = '''
+        SELECT categories.name, AVG(books.average_rating) 
+        FROM categories
+        JOIN book_categories ON categories.id = book_categories.category_id
+        JOIN books ON books.book_unique_id = book_categories.book_unique_id
+        WHERE books.average_rating IS NOT NULL
+        GROUP BY categories.name;
+    '''
+    results = get_data_from_db(query)
+    genres = [result[0] for result in results]
+    avg_ratings = [result[1] for result in results]
 
     plt.barh(genres, avg_ratings)
     plt.xlabel('Average Rating')
