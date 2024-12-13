@@ -147,7 +147,86 @@ def link_movie_genres(cursor, movie_id, genre_ids):
         for genre_id in genre_ids:
             cursor.execute('INSERT OR IGNORE INTO movie_genres (movie_id, genre_id) VALUES (?, ?)', (movie_id, genre_id))
 
-# Initialize progress tracking
+# Functions related to Spotify Top Tracks API
+def get_toptrack_info(client_id, client_secret, start_index):
+    access_token = get_spotify_access_token(client_id, client_secret)
+    if not access_token:
+        print('u got get_toptrack_info wrong..')
+        return []
+    
+    batch = 25
+    with open("100 artists - Sheet1.csv", "r") as file:
+        reader = csv.reader(file)
+        next(reader)
+        artist_ids = [row[0] for row in reader]
+        batch_ids = artist_ids[start_index:start_index + batch]
+        if not batch_ids:
+            print("No more artist IDs to process.")
+            return []
+        
+    params = {"ids": ",".join(batch_ids)}
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    tracksdictlist = []
+    for artist_id in batch_ids:
+        url = "https://api.spotify.com/v1/artists/"+artist_id+"/top-tracks?market=US"
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 200:
+            tracksdict = response.json().get("tracks", [])
+            tracksdictlist.append(tracksdict)
+        else:
+            print(f"error in get_toptrack_info: {response.status_code}")
+            print(response.text)
+            return None
+    return tracksdictlist
+
+def create_toptrack_table(data, cursor, limit=25):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Top_tracks (
+            id TEXT NOT NULL PRIMARY KEY,
+            top_track TEXT NOT NULL
+        )
+    """)
+    
+    counter = 0
+    print("Going through " + str(len(data)) + " entries in data")
+    for tracks in data:
+        tracks = tracks[0]
+        if counter >= limit:
+            print("Limit reached")
+            break
+
+        id = 0
+        for artist in tracks['artists']:
+            artist_id = artist['id']
+            cursor.execute("SELECT 1 FROM Spotify_artists WHERE id = ?", (artist_id,))
+            if cursor.fetchone():
+                id = artist_id
+            else:
+                continue
+        
+        toptrack = tracks['name']
+
+        id = id.encode('utf-8').decode('utf-8')
+        toptrack = toptrack.encode('utf-8').decode('utf-8')
+
+        cursor.execute("SELECT 1 FROM Top_tracks WHERE id = ?", (id,))
+        if cursor.fetchone():
+            print('skipping ' + id)
+            continue
+
+        try:
+            print("inserting " + toptrack)
+            cursor.execute("""
+                INSERT INTO Top_tracks (id, top_track)
+                VALUES (?, ?)
+            """, (id, toptrack))
+            counter += 1
+        except BaseException as e:
+            print("Failed to insert " + str(e) + str(id))
+
+    print('did stuff in the NEW db table')
+
 def initialize_progress(cursor):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS progress (
@@ -160,7 +239,8 @@ def initialize_progress(cursor):
         INSERT OR IGNORE INTO progress (category, last_index) VALUES 
         ('books', 0),
         ('artists', 0),
-        ('movies', 0)
+        ('movies', 0),
+        ('top_tracks', 0)
     ''')
 
 def update_progress(cursor, category, index):
@@ -257,10 +337,11 @@ def main():
     total_books_processed = get_last_index(cursor, 'books')
     total_artists_processed = get_last_index(cursor, 'artists')
     total_movies_processed = get_last_index(cursor, 'movies')
+    total_toptracks_processed = get_last_index(cursor, 'top_tracks')
 
     # Process book data in batches of 25, up to 100 entries in total
     if total_books_processed < 100:
-        query = random.choice(BOOK_GENRES)  # Select a random genre
+        query = random.choice(BOOK_GENRES)
         books_to_fetch = min(25, 100 - total_books_processed)
         data = fetch_books(query, max_results=books_to_fetch, start_index=total_books_processed)
         if 'items' in data:
@@ -299,6 +380,17 @@ def main():
         update_progress(cursor, 'movies', total_movies_processed)
         conn.commit()
         print(f"Total movies processed: {total_movies_processed}")
+
+    # Process top tracks data in batches of 25
+    if total_toptracks_processed < len(total_artists):  # Assuming total_artists contains all artist IDs
+        toptracks_to_fetch = min(25, len(total_artists) - total_toptracks_processed)
+        toptracks_data = get_toptrack_info(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, start_index=total_toptracks_processed)
+        if toptracks_data:
+            create_toptrack_table(toptracks_data, cursor, limit=toptracks_to_fetch)
+            total_toptracks_processed += toptracks_to_fetch
+            update_progress(cursor, 'top_tracks', total_toptracks_processed)
+            conn.commit()
+            print(f"Total top tracks processed: {total_toptracks_processed}")
 
     # Commit and close the connection
     conn.commit()
