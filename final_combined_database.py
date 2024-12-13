@@ -29,6 +29,7 @@ def fetch_books(query, max_results=25, start_index=0):
     return response.json()
 
 def store_book_data_in_db(data, cursor):
+    books_to_add = 0
     for item in data.get('items', []):
         volume_info = item['volumeInfo']
         book_unique_id = item['id']
@@ -40,22 +41,26 @@ def store_book_data_in_db(data, cursor):
             INSERT OR IGNORE INTO books (book_unique_id, title, published_date, average_rating)
             VALUES (?, ?, ?, ?)
         ''', (book_unique_id, title, published_date, average_rating))
+        if cursor.rowcount > 0:  # Check if the book was inserted
+            authors = volume_info.get('authors', [])
+            for author in authors:
+                cursor.execute('INSERT OR IGNORE INTO authors (name) VALUES (?)', (author,))
+                cursor.execute('''
+                    INSERT OR IGNORE INTO book_authors (book_unique_id, author_id)
+                    SELECT ?, id FROM authors WHERE name = ?
+                ''', (book_unique_id, author))
 
-        authors = volume_info.get('authors', [])
-        for author in authors:
-            cursor.execute('INSERT OR IGNORE INTO authors (name) VALUES (?)', (author,))
-            cursor.execute('''
-                INSERT OR IGNORE INTO book_authors (book_unique_id, author_id)
-                SELECT ?, id FROM authors WHERE name = ?
-            ''', (book_unique_id, author))
+            categories = volume_info.get('categories', [])
+            for category in categories:
+                cursor.execute('INSERT OR IGNORE INTO categories (name) VALUES (?)', (category,))
+                cursor.execute('''
+                    INSERT OR IGNORE INTO book_categories (book_unique_id, category_id)
+                    SELECT ?, id FROM categories WHERE name = ?
+                ''', (book_unique_id, category))
 
-        categories = volume_info.get('categories', [])
-        for category in categories:
-            cursor.execute('INSERT OR IGNORE INTO categories (name) VALUES (?)', (category,))
-            cursor.execute('''
-                INSERT OR IGNORE INTO book_categories (book_unique_id, category_id)
-                SELECT ?, id FROM categories WHERE name = ?
-            ''', (book_unique_id, category))
+            books_to_add += 1
+
+    return books_to_add
 
 # Functions related to Spotify API
 def get_spotify_access_token(client_id, client_secret):
@@ -339,17 +344,21 @@ def main():
     total_movies_processed = get_last_index(cursor, 'movies')
     total_toptracks_processed = get_last_index(cursor, 'top_tracks')
 
-    # Process book data in batches of 25, up to 100 entries in total
+    # Ensure each run processes exactly 25 books
     if total_books_processed < 100:
-        query = random.choice(BOOK_GENRES)
-        books_to_fetch = min(25, 100 - total_books_processed)
-        data = fetch_books(query, max_results=books_to_fetch, start_index=total_books_processed)
-        if 'items' in data:
-            store_book_data_in_db(data, cursor)
-            total_books_processed += len(data['items'])
-            update_progress(cursor, 'books', total_books_processed)
-            conn.commit()
-            print(f"Total books processed: {total_books_processed}")
+        books_added = 0
+        while books_added < 25 and total_books_processed + books_added < 100:
+            query = random.choice(BOOK_GENRES)
+            data = fetch_books(query, max_results=25, start_index=total_books_processed + books_added)
+            if 'items' in data:
+                books_added += store_book_data_in_db(data, cursor)
+            else:
+                print("No more books found in current query.")
+                break
+        total_books_processed += books_added
+        update_progress(cursor, 'books', total_books_processed)
+        conn.commit()
+        print(f"Total books processed: {total_books_processed}")
 
     # Process Spotify artists data in batches of 25
     with open("100 artists - Sheet1.csv", "r") as file:
@@ -364,9 +373,8 @@ def main():
             update_progress(cursor, 'artists', total_artists_processed)
             conn.commit()
             print(f"Total artists processed: {total_artists_processed}")
-
-    # Process movie data in batches of 25
-    insert_genres(cursor, fetch_genres())
+ # Process movie data in batches of 25
+    insert_genres(cursor, fetch_genres())  # Ensure genres are inserted first
     if total_movies_processed < len(MOVIE_TITLES):
         movies_to_fetch = min(25, len(MOVIE_TITLES) - total_movies_processed)
         batch = MOVIE_TITLES[total_movies_processed:total_movies_processed + movies_to_fetch]
@@ -382,7 +390,7 @@ def main():
         print(f"Total movies processed: {total_movies_processed}")
 
     # Process top tracks data in batches of 25
-    if total_toptracks_processed < len(total_artists):  # Assuming total_artists contains all artist IDs
+    if total_toptracks_processed < len(total_artists):
         toptracks_to_fetch = min(25, len(total_artists) - total_toptracks_processed)
         toptracks_data = get_toptrack_info(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, start_index=total_toptracks_processed)
         if toptracks_data:
