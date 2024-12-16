@@ -7,7 +7,6 @@ import requests
 import sqlite3
 import pprint
 import os
-#from requests_oauthlib import OAuth1Session
 import base64
 
 # Define the database name as a constant
@@ -41,10 +40,9 @@ print(list_tables())
 
 def join_two_tables(cur):  # spotify table join
     cur.execute("""
-        SELECT Spotify_artists.id, Spotify_artists.name, Spotify_artists.popularity, Spotify_artists.genre, Top_tracks.top_track
+        SELECT Spotify_artists.id, Spotify_artists.name, Spotify_artists.popularity, Top_tracks.top_track
                 FROM Spotify_artists 
                 JOIN Top_tracks ON Spotify_artists.id = Top_tracks.id
-                GROUP BY Spotify_artists.genre
                 ORDER BY Spotify_artists.popularity DESC
                 """,)
     data = []
@@ -55,15 +53,15 @@ def join_two_tables(cur):  # spotify table join
 
 ### IMDB calculations
 
-def calculate_average_imdb_rating():
+###def calculate_average_imdb_rating():
     # Connect to the database
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
+   # conn = sqlite3.connect(DB_NAME)
+   # c = conn.cursor()
     # Query to calculate the average IMDb rating across all movies
-    c.execute("SELECT AVG(CAST(imdb_rating AS REAL)) FROM movies")
-    average_rating = c.fetchone()[0]
-    conn.close()
-    return average_rating
+   # c.execute("SELECT AVG(CAST(imdb_rating AS REAL)) FROM movies")
+    #average_rating = c.fetchone()[0]
+    #conn.close()
+  ###  return average_rating
 
 def calculate_average_rating_by_genre():
     # Connect to the database
@@ -138,23 +136,19 @@ def write_to_csv(data, filename, headers):
         writer.writerow(headers)
         writer.writerows(data)
 
-       
-
-
 def main():
-
     cur, conn = set_up_database("combined.db")
 
     # Calculate average IMDb rating
-    average_imdb_rating = calculate_average_imdb_rating()
-    print(f"Average IMDb Rating: {average_imdb_rating:.2f}")
+    #average_imdb_rating = calculate_average_imdb_rating()
+   # print(f"Average IMDb Rating: {average_imdb_rating:.2f}")
 
     # Write average IMDb rating to a CSV file
-    write_to_csv(
-        [(f"Average IMDb Rating", f"{average_imdb_rating:.2f}")],
-        'imdb_calculations.csv',
-        ['Description', 'Average Rating']
-    )
+   # write_to_csv(
+        #[(f"Average IMDb Rating", f"{average_imdb_rating:.2f}")],
+        #'imdb_calculations.csv',
+       # ['Description', 'Average Rating']
+   #)
 
     # Calculate average IMDb rating by genre
     average_rating_by_genre = calculate_average_rating_by_genre()
@@ -174,10 +168,8 @@ def main():
     write_to_csv(
         data,
         'spotify_data.csv',
-        ['id', 'name', 'popularity', 'genre', 'top_track']
+        ['id', 'name', 'popularity', 'top_track']
     )
-
-
 
 if __name__ == "__main__":
     main_calculations()
