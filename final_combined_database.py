@@ -106,14 +106,13 @@ def create_spotify_table(data, cursor):
         artist_id = artist['id']
         name = artist['name']
         popularity = artist['popularity']
-        genre = artist['genres'][0] if artist['genres'] else "Unknown"
         cursor.execute("SELECT 1 FROM Spotify_artists WHERE id = ?", (artist_id,))
         if cursor.fetchone():
             continue
         cursor.execute('''
-            INSERT INTO Spotify_artists (id, name, popularity, genre)
-            VALUES (?, ?, ?, ?)
-        ''', (artist_id, name, popularity, genre))
+            INSERT INTO Spotify_artists (id, name, popularity)
+            VALUES (?, ?, ?)
+        ''', (artist_id, name, popularity))
 
 # Functions related to TMDB API
 def fetch_genres():
@@ -309,8 +308,7 @@ def main():
         CREATE TABLE IF NOT EXISTS Spotify_artists (
             id TEXT NOT NULL PRIMARY KEY,
             name TEXT NOT NULL,
-            popularity INTEGER NOT NULL,
-            genre TEXT NOT NULL
+            popularity INTEGER NOT NULL
         )
     ''')
     cursor.execute('''
