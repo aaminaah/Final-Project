@@ -55,17 +55,17 @@ def average_rating_by_genre_graph():
     plt.show()
 
 # Graph for average IMDb rating
-def graph_imdb():
-    df = read_csv_data('imdb_calculations.csv', usecols=['Description', 'Average Rating'])
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(df['Description'], df['Average Rating'], color='pink')
-    ax.set_title("Average IMDb Rating")
-    ax.set_xlabel('Description')
-    ax.set_ylabel('Average Rating')
-    plt.tight_layout()
-    plt.savefig('imdb_graph.png')
-    print("Saved IMDb graph as 'imdb_graph.png'.")
-    plt.show()
+#def graph_imdb():
+    #df = read_csv_data('imdb_calculations.csv', usecols=['Description', 'Average Rating'])
+    #fig, ax = plt.subplots(figsize=(6, 4))
+    #ax.bar(df['Description'], df['Average Rating'], color='pink')
+    #ax.set_title("Average IMDb Rating")
+    #ax.set_xlabel('Description')
+    #ax.set_ylabel('Average Rating')
+    #plt.tight_layout()
+    #plt.savefig('imdb_graph.png')
+    #print("Saved IMDb graph as 'imdb_graph.png'.")
+    #plt.show()
 
 # Graph for average IMDb rating by genre
 def genre_imdb():
@@ -84,7 +84,7 @@ def genre_imdb():
 # Graph for top song popularity
 def plot_by_top_song(data):
     popularity = [row[2] for row in data[:5]]
-    toptrack = [row[4] for row in data[:5]]
+    toptrack = [row[3] for row in data[:5]]
 
     plt.figure(figsize=(8, 5))
     plt.bar(toptrack, popularity, color='violet', width=0.5)
@@ -108,18 +108,18 @@ def plot_by_top_artist(data):
     plt.tight_layout()
     plt.show()
 
-# Graph for top genre popularity
-def plot_by_top_genre(data):
-    popularity = [row[2] for row in data[:5]]
-    genre = [row[3] for row in data[:5]]
+# # Graph for top genre popularity
+# def plot_by_top_genre(data):
+#     popularity = [row[2] for row in data[:5]]
+#     genre = [row[3] for row in data[:5]]
 
-    plt.figure(figsize=(8, 5))
-    plt.bar(genre, popularity, color='orange', width=0.8)
-    plt.xlabel('Genre')
-    plt.ylabel('Popularity')
-    plt.title('Genre by Artist Popularity')
-    plt.tight_layout()
-    plt.show()
+#     plt.figure(figsize=(8, 5))
+#     plt.bar(genre, popularity, color='orange', width=0.8)
+#     plt.xlabel('Genre')
+#     plt.ylabel('Popularity')
+#     plt.title('Genre by Artist Popularity')
+#     plt.tight_layout()
+#     plt.show()
 
 # Main function to generate all graphs
 def main_graphs():
@@ -128,14 +128,14 @@ def main_graphs():
     average_rating_by_genre_graph()
 
     # IMDb data graphs
-    graph_imdb()
+    #graph_imdb()
     genre_imdb()
 
     # Spotify data graphs
     spotify_data = read_csv_data('spotify_data.csv').values
     plot_by_top_song(spotify_data)
     plot_by_top_artist(spotify_data)
-    plot_by_top_genre(spotify_data)
+    # plot_by_top_genre(spotify_data)
 
 if __name__ == "__main__":
     main_graphs()
